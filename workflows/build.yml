@@ -1,0 +1,35 @@
+name: Build Mod
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Forge-MDK 26.3 holen
+        run: |
+          curl -fsSL https://maven.minecraftforge.net/net/minecraftforge/forge/maven-metadata.xml -o meta.xml
+          V=$(grep -o '<version>26\.3-[^<]*</version>' meta.xml | sed 's/<[^>]*>//g' | sort -V | tail -1)
+          echo "Forge-Version: $V"
+          curl -fsSL "https://maven.minecraftforge.net/net/minecraftforge/forge/$V/forge-$V-mdk.zip" -o mdk.zip
+          mkdir mdk && unzip -q mdk.zip -d mdk
+          # falls das MDK in einem Unterordner liegt
+          if [ ! -f mdk/gradlew ]; then mv mdk/*/* mdk/ ; fi
+      - name: Mod-Code einfügen
+        run: |
+          rm -rf mdk/src/main/java/* mdk/src/main/resources/*.mcmeta
+          rm -f mdk/src/main/resources/META-INF/mods.toml
+          cp -r src/* mdk/src/
+          sed -i 's/^mod_id=.*/mod_id=armywar/' mdk/gradle.properties || true
+      - name: Bauen
+        working-directory: mdk
+        run: chmod +x gradlew && ./gradlew build --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: armywar-jar
+          path: mdk/build/libs/*.jar
